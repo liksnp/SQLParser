@@ -1,0 +1,1149 @@
+
+options{
+    STATIC=false ;
+    IGNORE_CASE=true ;
+//  DEBUG_LOOKAHEAD= true ;
+}
+
+PARSER_BEGIN(SQLParser)
+package nts.ds.ds;
+
+import java.io.Reader;
+import java.io.FileInputStream;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+
+class SQLParser {
+
+    /** Parse PL/SQL from files.  Each arg is expected to be the name of a file,
+        or "-" to indicate System.in.
+     */
+    public static void main( String args[] ) throws Throwable {
+        if (args.length < 1) {
+            args = new String[] {"-"};
+        }
+        for (int a = 0; a < args.length; ++a) {
+            final String input = args[a];
+            final SQLParser parser = new SQLParser("-".equals(input) ? System.in : new FileInputStream(input));
+            try {
+                parser.CompilationUnit();
+            } catch(Throwable t) {
+            	System.err.println(input + ":1: not parsed");
+            	t.printStackTrace();
+            }
+            System.out.println("Parsed input: " + input);
+			System.out.println(parser.select_);
+        }
+    }
+
+    public ParserSelectStatement select_;
+
+    public void reInit(Reader input) {
+        ReInit(input);
+    }
+
+    private String lastObjectReference = null;
+
+    protected boolean seeTYPE() {
+        return "TYPE".equalsIgnoreCase(getToken(1).image);
+    }
+
+    protected static final Set<String> ANALYTIC_FUNCTION_NAMES = new HashSet<String>();
+    static {
+        ANALYTIC_FUNCTION_NAMES.add("AVG");
+        ANALYTIC_FUNCTION_NAMES.add("CORR");
+        ANALYTIC_FUNCTION_NAMES.add("COVAR_POP");
+        ANALYTIC_FUNCTION_NAMES.add("COVAR_SAMP");
+        ANALYTIC_FUNCTION_NAMES.add("COUNT");
+        ANALYTIC_FUNCTION_NAMES.add("CUME_DIST");
+        ANALYTIC_FUNCTION_NAMES.add("DENSE_RANK");
+        ANALYTIC_FUNCTION_NAMES.add("FIRST");
+        ANALYTIC_FUNCTION_NAMES.add("FIRST_VALUE");
+        ANALYTIC_FUNCTION_NAMES.add("LAG");
+        ANALYTIC_FUNCTION_NAMES.add("LAST");
+        ANALYTIC_FUNCTION_NAMES.add("LAST_VALUE");
+        ANALYTIC_FUNCTION_NAMES.add("LEAD");
+        ANALYTIC_FUNCTION_NAMES.add("MAX");
+        ANALYTIC_FUNCTION_NAMES.add("MIN");
+        ANALYTIC_FUNCTION_NAMES.add("NTILE");
+        ANALYTIC_FUNCTION_NAMES.add("PERCENT_RANK");
+        ANALYTIC_FUNCTION_NAMES.add("PERCENTILE_CONT");
+        ANALYTIC_FUNCTION_NAMES.add("PERCENTILE_DISC");
+        ANALYTIC_FUNCTION_NAMES.add("RANK");
+        ANALYTIC_FUNCTION_NAMES.add("RATIO_TO_REPORT");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_SLOPE");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_INTERCEPT");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_COUNT");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_R2");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_AVGX");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_AVGY");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_SXX");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_SYY");
+        ANALYTIC_FUNCTION_NAMES.add("REGR_SXY");
+        ANALYTIC_FUNCTION_NAMES.add("ROW_NUMBER");
+        ANALYTIC_FUNCTION_NAMES.add("STDDEV");
+        ANALYTIC_FUNCTION_NAMES.add("STDDEV_POP");
+        ANALYTIC_FUNCTION_NAMES.add("STDDEV_SAMP");
+        ANALYTIC_FUNCTION_NAMES.add("SUM");
+        ANALYTIC_FUNCTION_NAMES.add("VAR_POP");
+        ANALYTIC_FUNCTION_NAMES.add("VAR_SAMP");
+        ANALYTIC_FUNCTION_NAMES.add("VARIANCE");
+    }
+
+    protected boolean seeAnalyticFunction() {
+        return "(".equals(getToken(2).image)
+            && ANALYTIC_FUNCTION_NAMES.contains(getToken(1).image.toUpperCase());
+    }
+
+}
+PARSER_END(SQLParser)
+
+
+SKIP:
+{
+    " "
+|   "\t"
+|   "\r"
+|   "\n"
+}
+
+/* Prefix      Meaning
+    -------------------
+    K_          Keyword
+    O_          Operator
+    S_          Substitutes
+*/
+
+TOKEN: /* SQL and PLSQL Keywords. prefixed with K_ to avoid name clashes */
+{
+    <K_ALL: "ALL">
+|   <K_ALTER: "ALTER">
+|   <K_AND: "AND">
+|   <K_ANY: "ANY">
+|   <K_AS: "AS">
+|   <K_ASC:"ASC">
+|   <K_BEGIN: "BEGIN">
+|   <K_BETWEEN:"BETWEEN">
+|   <K_BINARY_INTEGER: "BINARY_INTEGER">
+|   <K_BOOLEAN:"BOOLEAN">
+|   <K_BY:"BY">
+|   <K_CALL:"CALL">
+|   <K_CASE:"CASE">
+|   <K_CAST:"CAST">
+|   <K_CHAR:"CHAR">
+|   <K_CLOSE:"CLOSE">
+|   <K_COMMENT:"COMMENT">
+|   <K_COMMIT:"COMMIT">
+|   <K_COMMITTED:"COMMITTED">
+|   <K_CONNECT:"CONNECT">
+|   <K_CONSTANT:"CONSTANT">
+|   <K_CONSTRAINT:"CONSTRAINT">
+|   <K_CONSTRAINTS:"CONSTRAINTS">
+|   <K_CURRENT:"CURRENT">
+|   <K_CURSOR:"CURSOR">
+|   <K_DATE:"DATE">
+|   <K_DECIMAL:"DECIMAL">
+|   <K_DECLARE:"DECLARE">
+|   <K_DEFAULT:"DEFAULT">
+|   <K_DELETE:"DELETE">
+|   <K_DESC:"DESC">
+|   <K_DISTINCT:"DISTINCT">
+|   <K_DO:"DO">
+|   <K_ELSE:"ELSE">
+|   <K_ELSIF:"ELSIF">
+|   <K_END:"END">
+|   <K_ESCAPE:"ESCAPE">
+|   <K_EXCEPTION:"EXCEPTION">
+|   <K_EXCEPTION_INIT:"EXCEPTION_INIT">
+|   <K_EXCLUSIVE:"EXCLUSIVE">
+|   <K_EXISTS:"EXISTS">
+|   <K_EXIT:"EXIT">
+|   <K_FETCH:"FETCH">
+|   <K_FLOAT:"FLOAT">
+|   <K_FOR:"FOR">
+|   <K_FORALL:"FORALL">
+|   <K_FROM:"FROM">
+|   <K_FULL:"FULL">
+|   <K_FUNCTION:"FUNCTION">
+|   <K_GOTO:"GOTO">
+|   <K_GROUP:"GROUP">
+|   <K_HAVING:"HAVING">
+|   <K_IF:"IF">
+|   <K_IN:"IN">
+|   <K_INDEX:"INDEX">
+|   <K_INNER:"INNER">
+|   <K_INSERT:"INSERT">
+|   <K_INTEGER:"INTEGER">
+|   <K_INTERSECT:"INTERSECT">
+|   <K_INTO:"INTO">
+|   <K_IS:"IS">
+|   <K_ISOLATION:"ISOLATION">
+|   <K_LEFT:"LEFT">
+|   <K_LIKE:"LIKE">
+|   <K_LIMIT:"LIMIT">
+|   <K_LOCK:"LOCK">
+|   <K_LOOP:"LOOP">
+|   <K_MERGE:"MERGE">
+|   <K_MINUS:"MINUS">
+|   <K_NATURAL:"NATURAL">
+|   <K_NOT:"NOT">
+|   <K_NOWAIT:"NOWAIT">
+|   <K_NULL:"NULL">
+|   <K_NULLS:"NULLS">
+|   <K_NUMBER:"NUMBER">
+|   <K_OF:"OF">
+|   <K_OFFSET:"OFFSET">
+|   <K_ON:"ON">
+|   <K_ONLY:"ONLY">
+|   <K_OPEN:"OPEN">
+|   <K_OR:"OR">
+|   <K_ORDER:"ORDER">
+|   <K_OUT:"OUT">
+|   <K_OVER:"OVER">
+|   <K_PACKAGE:"PACKAGE">
+|   <K_PARTITION:"PARTITION">
+|   <K_POSITIVE:"POSITIVE">
+|   <K_PRAGMA:"PRAGMA">
+|   <K_PRIOR:"PRIOR">
+|   <K_PROCEDURE:"PROCEDURE">
+|   <K_PX_GRANULE:"PX_GRANULE">
+|   <K_RAISE:"RAISE">
+|   <K_RANGE:"RANGE">
+|   <K_READ:"READ">
+|   <K_REAL:"REAL">
+|   <K_RECORD:"RECORD">
+|   <K_REF:"REF">
+|   <K_RETURN:"RETURN">
+|   <K_RETURNING:"RETURNING">
+|   <K_REVERSE:"REVERSE">
+|   <K_RIGHT:"RIGHT">
+|   <K_ROLLBACK:"ROLLBACK">
+|   <K_ROW:"ROW">
+|   <K_ROWS:"ROWS">
+|   <K_SAMPLE:"SAMPLE">
+|   <K_SAVEPOINT:"SAVEPOINT">
+|   <K_SELECT:"SELECT">
+|   <K_SERIALIZABLE:"SERIALIZABLE">
+|   <K_SET:"SET">
+|   <K_SHARE:"SHARE">
+|   <K_SIBLINGS:"SIBLINGS">
+|   <K_SKIP:"SKIP">
+|   <K_SMALLINT:"SMALLINT">
+|   <K_SQL:"SQL">
+|   <K_START:"START">
+|   <K_TABLE:"TABLE">
+|   <K_TEST:"TEST">
+|   <K_THEN:"THEN">
+|   <K_TO:"TO">
+|   <K_TRANSACTION:"TRANSACTION">
+|   <K_UNION:"UNION">
+|   <K_UNIQUE:"UNIQUE">
+|   <K_UPDATE:"UPDATE">
+|   <K_USE:"USE">
+|   <K_USING:"USING">
+|   <K_VALUES:"VALUES">
+|   <K_VARCHAR2:"VARCHAR2">
+|   <K_VARCHAR:"VARCHAR">
+|   <K_WAIT:"WAIT">
+|   <K_WHEN:"WHEN">
+|   <K_WHERE:"WHERE">
+|   <K_WHILE:"WHILE">
+|   <K_WITH:"WITH">
+|   <K_WORK:"WORK">
+|   <K_WRITE:"WRITE">
+}
+
+TOKEN : /* Numeric Constants */
+{
+	< S_NUMBER: <FLOAT>
+	    | <FLOAT> ( ["e","E"] ([ "-","+"])? <FLOAT> )?
+    	>
+  | 	< #FLOAT: <INTEGER>
+	    | <INTEGER> ( "." <INTEGER> )?
+	    | "." <INTEGER>
+    	>
+  | 	< #INTEGER: ( <DIGIT> )+ >
+  | 	< #DIGIT: ["0" - "9"] >
+}
+
+SPECIAL_TOKEN:
+{
+   <LINE_COMMENT: "--"(~["\r","\n"])*>
+|  <MULTI_LINE_COMMENT: "/*" (~["*"])* "*" ("*" | (~["*","/"] (~["*"])* "*"))* "/">
+}
+
+
+TOKEN:
+{
+    < S_IDENTIFIER: (<LETTER>)+ (<DIGIT> | <LETTER> |<SPECIAL_CHARS>)* >
+  | < #LETTER: ["a"-"z", "A"-"Z"] >
+  | < #SPECIAL_CHARS: "$" | "_" | "#">
+  | < S_BIND: ":" ( <S_NUMBER> | <S_IDENTIFIER> ("." <S_IDENTIFIER>)?) >
+  | < S_CHAR_LITERAL: "'" (~["'"])* "'" ("'" (~["'"])* "'")*>
+  | < S_QUOTED_IDENTIFIER: "\"" (~["\n","\r","\""])* "\"" >
+}
+
+void CompilationUnit():
+{}
+{
+    SequenceOfStatements()  
+}
+
+void SequenceOfStatements():
+{}
+{
+    (PLSQLStatement())+
+}
+
+void PLSQLStatement():
+{}
+{
+    SQLStatement()    
+}
+
+void SQLStatement():
+{}
+{
+    QueryStatement()    
+}
+
+void QueryStatement():
+{ParserSelectStatement select;}
+{
+    select = SelectStatement()
+    ";"
+    {select_ = select;}
+}
+
+/* ---------------- General Productions --------------------- */
+
+String TableColumn():
+{String s;}
+{
+    s = ObjectReference(){return s;}
+}
+
+String OracleObjectName():
+{}
+{
+    <S_IDENTIFIER>        {return token.image;}
+  | <S_QUOTED_IDENTIFIER> {String s = token.image; return s.substring(1, s.length() - 1);}
+}
+
+String TNSName():
+{
+    StringBuilder name = new StringBuilder();
+}
+{
+    <S_IDENTIFIER>      {name.append(token.image);}
+    ("." <S_IDENTIFIER> {name.append(".").append(token.image);} )*
+    {return name.toString();}
+}
+
+ParserOperator Relop():
+{ParserOperator op;}
+{
+  ( 
+    "="                  {op = ParserOperator.Eq;}
+  | "!" "="              {op = ParserOperator.Ne;}
+  | "#"                  {op = ParserOperator.None;}
+  | LOOKAHEAD(2) ">" "=" {op = ParserOperator.Ge;}
+  | ">"                  {op = ParserOperator.Gt;}
+  | LOOKAHEAD(2) "<" ">" {op = ParserOperator.Ne;}
+  | LOOKAHEAD(2) "<" "=" {op = ParserOperator.Le;}
+  | "<"                  {op = ParserOperator.Lt;}
+  )
+  {return op;}
+}
+
+String TableName():
+{
+    String s;
+    StringBuilder name = new StringBuilder();
+}
+{
+    // schema.table@link
+    s=OracleObjectName()       {name.append(s);}
+    [ "." s=OracleObjectName() {name.append(".").append(s);} ]
+    [ "@" s=TNSName()          {name.append("@").append(s);} ]
+    {return name.toString();}
+}
+
+/* --------------- General Productions ends here --------------- */
+
+/* ----------- SQL productions start here ----------------- */
+
+ParserSelectStatement SelectStatement():
+{
+    List<ParserSortItem> orderBy = null;
+    ParserSelectStatement select;
+    ParserExpression limit=null, offset=null;
+    ParserLimitClause limitclause = null;
+}
+{
+    select = SelectWithoutOrder()
+    [ orderBy = OrderByClause() ]
+    [ ForUpdateClause() ]
+    [ "LIMIT"  limit  = SQLPrimaryExpression() ]
+    [ "OFFSET" offset = SQLPrimaryExpression() ]
+    {
+        if ((limit!=null) || (offset!=null))
+            limitclause = new ParserLimitClause(limit, offset);
+            ((ParserSingleSelectStatement)select).setLimitClause(limitclause);
+        ((ParserSingleSelectStatement)select).setOrderBy(orderBy);
+        return select;    
+    }
+}
+
+ParserSelectStatement SelectWithoutOrder():
+{
+    ParserSelectStatement left, right = null; 
+    ParserSelectOperator op = null; 
+    boolean all = false;
+}
+{
+    left = SelectSet() 
+    (
+        (("UNION" 
+             ["ALL" {all = true;}]
+         ) {op = all ? ParserSelectOperator.UnionAll : ParserSelectOperator.Union;}
+        | "INTERSECT" {op = ParserSelectOperator.Intersect;} 
+        | "MINUS"     {op = ParserSelectOperator.Except;}
+        ) 
+        right = SelectSet()
+        {left = new ParserMultiSelectStatement(left, op, right);}
+    )*
+    {return left;}
+}
+
+ParserSelectStatement SelectSet():
+{ParserSelectStatement select;}
+{
+    (select = Select() | "(" select = SubQuery() ")")
+    {return select;}
+}
+
+ParserSelectStatement Select():
+{
+    List<ParserSelectColumn> columns; 
+    List<ParserExpression> groupBy=null; 
+    ParserFromClause from; 
+    ParserExpression whereExpr=null;
+    ParserSelectStatement select;
+}
+{
+    "SELECT" [ "ALL" | "DISTINCT" | "UNIQUE" ] columns = SelectList()
+    from = FromClause()
+	[ whereExpr = WhereClause() ]
+    [ ConnectClause() ]
+    [ (
+          ( HavingClause() groupBy = GroupByClause() ) 
+        | ( groupBy = GroupByClause() [HavingClause()] )      
+      ) 
+    ]
+    {
+        select = new ParserSingleSelectStatement(null, columns, from, whereExpr, groupBy, null, null, null);
+        return select;
+    }
+}
+
+/* Checks for whatever follows  SELECT */
+List<ParserSelectColumn> SelectList():
+{
+	List<ParserSelectColumn> columns = new ArrayList<ParserSelectColumn>();
+	ParserSelectColumn column;
+}
+{
+    ( 
+	    "*" {
+	    		column = new ParserSelectColumn(null, ""); 
+	    		column.setTableName(null); 
+	    		columns.add(column);
+	    	} 
+	    | column = SelectItem() {columns.add(column);} 
+	    ("," column = SelectItem() {columns.add(column);})* 
+    )
+    {return columns;}
+}
+
+ParserSelectColumn SelectItem():
+{
+	String table="", alias="";
+	ParserExpression expr=null;
+	ParserObjectName name;
+	ParserSelectColumn column;
+}
+{
+    (
+        LOOKAHEAD(2) table = OracleObjectName()".*" // table.*
+      | LOOKAHEAD(4) table = OracleObjectName()"." OracleObjectName() ".*" // schema.table.*
+      | expr = SQLSimpleExpression() // column name or expression
+    )
+    [ [ "AS" ] alias = SelectItemAlias()]
+	{
+		if (expr != null){
+			column = new ParserSelectColumn(expr, alias);
+		} else {
+			name = new ParserObjectName(table);
+			column = new ParserSelectColumn(name);
+		}
+		return column;
+	}
+}
+
+String SelectItemAlias():
+{String s = null;}
+{
+    (s = OracleObjectName()
+    // Some keywords are acceptable as aliases:
+     | "RETURNING" | "WHEN") 
+    {return (s!=null) ? s : token.image;}
+}
+
+ParserExpression AnalyticFunction():
+{ParserExpression expr;}
+{
+    expr = FunctionCall() [ "OVER" "(" AnalyticClause() ")" ]
+    {return expr;}
+}
+
+void AnalyticClause():
+{}
+{
+    [ QueryPartitionClause() ] [ OrderByClause() [ WindowingClause() ] ]
+}
+
+void QueryPartitionClause():
+{}
+{
+    "PARTITION" "BY" SQLExpression() ( "," SQLExpression() )*
+}
+
+void WindowingClause():
+{}
+{
+    ("ROWS" | "RANGE")
+    ( "CURRENT" "ROW"
+    | SQLSimpleExpression() ID("PRECEDING") // perhaps UNBOUNDED PRECEDING
+    | "BETWEEN" ( "CURRENT" "ROW"
+                | SQLSimpleExpression() ID("PRECEDING|FOLLOWING") // perhaps UNBOUNDED FOLLOWING
+                )
+          "AND" ( "CURRENT" "ROW"
+                | SQLSimpleExpression() ID("PRECEDING|FOLLOWING") // perhaps UNBOUNDED PRECEDING
+                )
+    )
+}
+
+ParserFromClause FromClause():
+{
+    ParserExpression table;
+    ParserFromClause from = new ParserFromClause(); 
+}
+{
+    "FROM" table = TableReference() {from.AddExpr(table);}
+    ( "," table = TableReference()  {from.AddExpr(table);} )*
+    {
+        return from;    
+    }
+}
+
+ParserExpression TableReference():
+{ParserExpression table;}
+{
+    (
+        "ONLY" 
+        "(" table = QueryTableExpression() ")"
+      | table = QueryTableExpression()
+    )
+    {return table;}
+}
+
+ParserExpression QueryTableExpression():
+{
+    String tableName = "", alias = "";
+    ParserObjectName name = null;
+    ParserExpression left = null;
+    ParserJoinExpression right = null;
+}
+{
+    (  tableName = TableName() 
+       {  
+           name = new ParserObjectName(tableName); 
+           left = new ParserNameExpression(name);
+       } // might also be a query name
+     | TableCollectionExpression()
+     | LOOKAHEAD(3) "(" SubQuery() ")"
+     | "(" TableReference() ")"     
+    )
+    [alias = OracleObjectName()] // alias
+    (right = Join() {right.setLeftExpression(left); left = right;})*
+    {
+        return left;
+    }
+}
+
+ParserExpression TableCollectionExpression():
+{ParserExpression expr;}
+{
+    "TABLE" "(" expr = SQLSimpleExpression() ")" 
+    [ "(" "+" ")" ]
+    {return expr;}
+}
+
+ParserJoinExpression Join():
+{
+    ParserJoinOperator op;
+    ParserExpression expr, table;
+    ParserExpression col=null, cond=null;
+    ParserListExpression colList = new ParserListExpression();
+}
+{
+    op = JoinType() 
+    ID("JOIN") 
+    table = TableReference() 
+    (
+        "ON" cond = SQLExpression() | 
+        "USING" "(" 
+                     col = ColumnName() {colList.add(col);}
+                     ("," col = ColumnName() {colList.add(col);})* 
+                ")"
+    )
+    {
+        expr = (cond!=null) ? cond : colList;
+        return new ParserJoinExpression(null, op, table, expr);  
+    }
+
+//| ("CROSS" | "NATURAL" JoinType()) ID("JOIN") TableReference()
+}
+
+ParserJoinOperator JoinType():
+{ParserJoinOperator op;}
+{
+  (
+    "INNER" {op = ParserJoinOperator.Inner;}
+  | 
+    (    
+	    "LEFT"  {op = ParserJoinOperator.Left;}
+	  | "RIGHT" {op = ParserJoinOperator.Right;}
+	  | "FULL"  {op = ParserJoinOperator.Full;}
+    )   
+    ID("OUTER")
+  )
+  {return op;}
+}
+
+ParserNameExpression ColumnName():
+{ParserObjectName name;}
+{
+    <S_IDENTIFIER> 
+    {
+        name = new ParserObjectName(token.image);
+        return new ParserNameExpression(name);
+    }
+}
+
+ParserExpression WhereClause():
+{ParserExpression expr;}
+{
+    "WHERE" expr = SQLExpression() {return expr;}
+}
+
+void ConnectClause():
+{}
+{
+    // The following grammar will take 2 "START WITH" expressions
+    // which is not correct. But alright, because only valid statements
+    // will be given.
+   (["START" "WITH" SQLExpression()] "CONNECT" "BY" SQLExpression()
+    ["START" "WITH" SQLExpression()])
+}
+
+List<ParserExpression> GroupByClause():
+{ParserExpression expr;}
+{
+    "GROUP" "BY" expr = SQLExpressionList() 
+    {return (expr instanceof ParserListExpression) ? ((ParserListExpression)expr).list : null;}
+}
+
+void HavingClause():
+{}
+{
+    "HAVING" SQLExpression()
+}
+
+List<ParserSortItem> OrderByClause():
+{
+    List<ParserSortItem> list = new ArrayList<ParserSortItem>(); 
+    ParserSortItem item;
+}
+{
+    "ORDER" ["SIBLINGS"] "BY" item = OrderByExpression() {list.add(item);} 
+    ("," item = OrderByExpression() {list.add(item);})*
+    {return list;}
+}
+
+ParserSortItem OrderByExpression():
+{
+    ParserExpression expr; 
+    ParserSortOrder order = null;
+}
+{
+    expr = SQLSimpleExpression()
+    ["ASC"  {order = ParserSortOrder.Ascending;} | 
+     "DESC" {order = ParserSortOrder.Descending;}]
+    ["NULLS" ID("LAST")]
+    {return new ParserSortItem(expr, order);}
+}
+
+void ForUpdateClause():
+{}
+{
+    "FOR" "UPDATE" [ "OF" TableColumn() ("," TableColumn())* ]
+    [ "NOWAIT" | "WAIT" SQLSimpleExpression() ]
+}
+
+ParserExpression SQLExpression():
+{
+    ParserExpression left, right; 
+    ParserOperator op = ParserOperator.Or;
+}
+{
+    left = SQLAndExpression() 
+    (
+        "OR" right = SQLAndExpression() 
+        {left = new ParserBinaryExpression(left, op, right);}
+    )*
+    {return left;}
+}
+
+ParserExpression SQLAndExpression():
+{
+    ParserExpression left, right; 
+    ParserOperator op = ParserOperator.And;
+}
+{
+    left = SQLUnaryLogicalExpression() 
+    (
+        "AND" right = SQLUnaryLogicalExpression() 
+        {left = new ParserBinaryExpression(left, op, right);}
+    )*
+    {return left;}
+}
+
+ParserExpression SQLUnaryLogicalExpression():
+{
+    ParserExpression left = null; 
+    ParserOperator op = null;
+}
+{
+    LOOKAHEAD(2) ExistsClause()
+  | (["NOT"] left = SQLRelationalExpression())
+  {
+      return left;      
+  }
+}
+
+ParserExistsExpression ExistsClause():
+{ParserSelectStatement select;}
+{
+    ["NOT"] "EXISTS" "(" select = SubQuery() ")"
+    {return new ParserExistsExpression(select);}
+}
+
+ParserExpression SQLRelationalExpression():
+{ParserExpression expr, rexpr=null;}
+{
+    /* Only after looking past "(", Expression() and "," we will know that
+       it is expression list */
+
+    (LOOKAHEAD("(" SQLSimpleExpression() ",")
+    "(" expr = SQLExpressionList() {} ")"
+|
+    (["PRIOR"] expr = SQLSimpleExpression()))
+
+    /* Lookahead(2) is required because of NOT IN,NOT BETWEEN and NOT LIKE */
+   (  rexpr = SQLRelationalOperatorExpression() 
+   |  LOOKAHEAD(2) (rexpr = SQLInClause())
+   |  LOOKAHEAD(2) (rexpr = SQLBetweenClause())
+   |  LOOKAHEAD(2) (rexpr = SQLLikeClause())
+   |  IsNullClause()
+   )? 
+    {
+        if (rexpr instanceof ParserLikeExpression)
+            ((ParserLikeExpression)rexpr).setLeftExpression(expr);
+        else if (rexpr instanceof ParserBetweenExpression)
+            ((ParserBetweenExpression)rexpr).setLeftExpression(expr);
+        else if (rexpr instanceof ParserInExpression)
+            ((ParserInExpression)rexpr).setExpression(expr);
+        else if (rexpr instanceof ParserBinaryExpression)
+            ((ParserBinaryExpression)rexpr).setLeftExpression(expr);
+        else if (rexpr instanceof ParserUnaryExpression)
+            ((ParserUnaryExpression)rexpr).setExpression(expr);
+        return (rexpr!=null) ? rexpr : expr;
+    }
+}
+
+ParserUnaryExpression IsNullClause():
+{
+    ParserOperator op = ParserOperator.Is_Null;
+}
+{
+    "IS" 
+    ["NOT" {op = ParserOperator.Not_Null;}] 
+    "NULL"
+    {return new ParserUnaryExpression(op, null);}
+}
+
+ParserListExpression SQLExpressionList():
+{
+    ParserListExpression list = new ParserListExpression(); 
+    ParserExpression expr;
+}
+{
+    expr = SQLExpression()     {list.add(expr);} 
+    ("," expr =SQLExpression() {list.add(expr);})* 
+    {return list;}
+}
+
+ParserBinaryExpression SQLRelationalOperatorExpression():
+{
+    ParserExpression expr=null; 
+    ParserOperator op;
+}
+{
+
+    op = Relop()
+
+    /* Only after seeing an ANY/ALL or "(" followed by a SubQuery() we can
+    determine that is is a sub-query
+    */
+    (   LOOKAHEAD("ANY" | "ALL" | "(" "SELECT")
+        (["ALL" | "ANY"] "(" SubQuery() ")")
+        |
+        ["PRIOR"] expr = SQLSimpleExpression()
+    )
+    {return new ParserBinaryExpression(null, op, expr);}
+}
+
+ParserInExpression SQLInClause():
+{
+    ParserSelectStatement select=null; 
+    ParserListExpression list=null; 
+    boolean in = true;
+}
+{
+    ["NOT" {in = false;}] 
+    "IN" "(" 
+             (
+                 LOOKAHEAD(3) select = SubQuery() {} 
+               | list = SQLExpressionList() {}
+             ) 
+    ")"
+    {return (list!=null) ? new ParserInExpression(null, in, list) : new ParserInExpression(null, in, select);}
+}
+
+ParserBetweenExpression SQLBetweenClause():
+{
+    ParserExpression begin, end; 
+    boolean not = true;
+}
+{
+    ["NOT" {not = false;}] 
+    "BETWEEN" begin = SQLSimpleExpression() 
+    "AND" end = SQLSimpleExpression()
+    {return new ParserBetweenExpression(null, not, begin, end);}
+}
+
+ParserLikeExpression SQLLikeClause():
+{
+    ParserExpression rexpr, eexpr = null;
+    ParserLikeOperator op = new ParserLikeOperator(ParserLike.Like, false);
+}
+{
+    ["NOT" {op.setNegate(true);}] 
+    "LIKE" rexpr = SQLSimpleExpression() 
+    ["ESCAPE" eexpr = SQLSimpleExpression()]
+    {return new ParserLikeExpression(null, op, rexpr, eexpr);}
+}
+
+ParserExpression SQLSimpleExpression():
+{
+    ParserExpression left, right; 
+    ParserOperator op=null;
+}
+{
+    left = SQLMultiplicativeExpression() 
+	(
+        ("+" | "-" | "||") 
+        {
+            switch (token.image) {
+                case "+":
+                    op = ParserOperator.Plus;
+        	        break;
+                case "-":
+        	        op = ParserOperator.Minus;
+        	        break;
+                case "||":
+        	        op = ParserOperator.Or;
+        	        break;
+            }
+        } 
+        right = SQLMultiplicativeExpression(){
+            left = new ParserBinaryExpression(left, op, right);
+        }
+	)*
+	{
+        return left;
+    }
+}
+
+
+ParserExpression SQLMultiplicativeExpression():
+{
+    ParserExpression left, right; 
+    ParserOperator op=null;
+}
+{
+    left = SQLExponentExpression() 
+	(
+        ("*" | "/") 
+        {
+            switch (token.image) {
+                case "*":
+                    op = ParserOperator.Star;
+        	        break;
+                case "/":
+        	        op = ParserOperator.Slash;
+        	        break;
+            }
+        } 
+        right = SQLExponentExpression(){
+            left = new ParserBinaryExpression(left, op, right);
+        }
+	)*
+	{
+        return left;
+    }
+}
+
+ParserExpression SQLExponentExpression():
+{
+    ParserExpression left, right; 
+    ParserOperator op=null;
+}
+{
+    left = SQLUnaryExpression() 
+	( "**" right = SQLUnaryExpression(){
+           op = ParserOperator.Star;	
+           left = new ParserBinaryExpression(left, op, right);
+        }
+	)*
+	{
+        return left;
+    }
+}
+
+ParserExpression SQLUnaryExpression():
+{
+    ParserExpression left; 
+    ParserOperator op = null;
+}
+{
+    [("+" | "-"){op = (token.image=="+") ? ParserOperator.Plus : ParserOperator.Minus;}] 
+	(left = SQLPrimaryExpression())
+	{return new ParserUnaryExpression(op, left);}
+}
+
+
+ParserExpression SQLPrimaryExpression():
+{
+    String column = ""; 
+    ParserObjectName name = null; 
+    ParserExpression expr = null;
+    ParserSelectStatement select = null;
+}
+{
+  ( <S_NUMBER> {column = token.image;}
+  | <S_CHAR_LITERAL> {column = token.image;}
+  | "NULL" {expr = new ParserNullExpression();}
+  | expr = SQLCaseExpression()
+  | "(" 
+         (
+             LOOKAHEAD(3) select = SelectStatement() 
+                {expr = new ParserSelectExpression(select);}
+           | expr = SQLExpression()
+         ) 
+    ")"
+  | LOOKAHEAD(IntervalExpression()) IntervalExpression()
+  | LOOKAHEAD(OuterJoinExpression()) OuterJoinExpression()
+  | LOOKAHEAD({seeAnalyticFunction()}) expr = AnalyticFunction()
+  | LOOKAHEAD(FunctionReference() "(") expr = FunctionCall()
+  | column = TableColumn() // Might be a call to a parameter-less function.
+  )
+    {
+    	if (column!="") 
+    	    name = new ParserObjectName(column);    	
+		return (expr!=null) ? expr : new ParserNameExpression(name);
+	}
+}
+
+ParserCaseExpression SQLCaseExpression():
+{
+    ParserExpression operand=null, witem, titem, eitem=null; 
+    List<ParserCaseItem> items = new ArrayList<ParserCaseItem>();
+    ParserCaseItem item;
+}
+{
+    "CASE" 
+    (
+        operand = SQLSimpleExpression() 
+        (
+           "WHEN" witem = SQLSimpleExpression() 
+           "THEN" titem = SQLSimpleExpression()
+           {
+               item = new ParserCaseItem(witem, titem);
+               items.add(item);
+           }
+         )*
+      | 
+        (
+           "WHEN" witem = SQLExpression() 
+           "THEN" titem = SQLSimpleExpression()
+           {
+               item = new ParserCaseItem(witem, titem);
+               items.add(item);
+           }
+        )*
+    )
+    ["ELSE" eitem = SQLSimpleExpression()]
+    "END"
+    {return new ParserCaseExpression(operand, items, eitem);}
+}
+
+void IntervalExpression():
+{}
+{
+    ID("INTERVAL") SQLSimpleExpression()
+    ( LOOKAHEAD({"DAY".equalsIgnoreCase(getToken(1).image)})
+      ID("DAY") ["(" <S_NUMBER> ")"] "TO" ID("SECOND") ["(" <S_NUMBER> ")"]
+    | ID("YEAR") ["(" <S_NUMBER> ")"] "TO" ID("MONTH") ["(" <S_NUMBER> ")"]
+    )
+}
+
+ParserFunctionExpression FunctionCall():
+{
+    String name; 
+    List<ParserExpression> exargs = null; 
+    ParserDistinct dist = null;
+}
+{
+    name = FunctionReference() (
+        LOOKAHEAD({"TRIM".equalsIgnoreCase(lastObjectReference)}) TrimArguments()
+      | LOOKAHEAD({"EXTRACT".equalsIgnoreCase(lastObjectReference)}) "(" DatetimeField() "FROM" SQLSimpleExpression() ")"
+      | [ 
+          "(" 
+              [
+                 [   "ALL"      {dist = ParserDistinct.All;} 
+                   | "DISTINCT" {dist = ParserDistinct.Distinct;} 
+                   | "UNIQUE"   {dist = ParserDistinct.None;} 
+                 ] 
+                 (exargs = FunctionArgumentList() | "*")
+              ] 
+          ")" 
+        ]
+    ) 
+    {return new ParserFunctionExpression(name, dist, exargs);}
+    // "all/distinct/unique/*" are permitted only with aggregate functions,
+    // but this parser allows their use with any function.
+}
+
+String FunctionReference():
+{
+    String name;
+}
+{
+    name = ObjectReference()
+    {return name;}
+}
+
+List<ParserExpression> FunctionArgumentList():
+{
+    ParserExpression expr; 
+    List<ParserExpression> exargs = new ArrayList<ParserExpression>();
+}
+{
+    expr = FunctionArgument()      {exargs.add(expr);}
+    ("," expr = FunctionArgument() {exargs.add(expr);})*
+    {return exargs;}
+}
+
+ParserExpression FunctionArgument():
+{ParserExpression expr;}
+{
+    [LOOKAHEAD(2) <S_IDENTIFIER> "=>"] expr = SQLExpression()
+    {return expr;}
+}
+
+void TrimArguments():
+{}
+{
+    "(" ( LOOKAHEAD({getToken(1).image.matches("(?i)LEADING|TRAILING|BOTH")})
+            <S_IDENTIFIER> [SQLSimpleExpression()] "FROM" SQLSimpleExpression()
+        | SQLSimpleExpression() ["FROM" SQLSimpleExpression()]
+        )
+    ")"
+}
+
+void DatetimeField():
+{}
+{
+    <S_IDENTIFIER>
+}
+
+String ObjectReference():
+{
+    String s;
+    StringBuilder name = new StringBuilder();
+}
+{
+    s=OracleObjectName()       {name.append(s);}
+    [ "." s=OracleObjectName() {name.append(".").append(s);}
+    [ "." s=OracleObjectName() {name.append(".").append(s);}
+    ]]
+    [ "@" ("!" | s=TNSName()   {name.append("@").append(s);} )] // remote reference
+    // The @! idiom is undocumented, but accepted by Oracle software.
+    {return lastObjectReference = name.toString();}
+}
+
+void OuterJoinExpression():
+{}
+{
+    TableColumn() "(" "+" ")"
+}
+
+ParserSelectStatement SubQuery() :
+{
+  ParserSelectStatement select;
+}
+{
+  select = SelectStatement()
+  {
+    return select;
+  }
+}
+
+/** Expect an <S_IDENTIFIER> with the given value. */
+void ID(String id):
+{}
+{
+    <S_IDENTIFIER>
+    {
+        if (!token.image.matches("(?i)" + id)) {
+            throw new ParseException("Encountered " + token.image
+                + " at line " + token.beginLine + ", column " + token.beginColumn + "."
+                + "\nWas expecting: " + id);
+        }
+    }
+}
